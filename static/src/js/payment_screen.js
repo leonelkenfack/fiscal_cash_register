@@ -2,6 +2,8 @@
 
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
+import { useService } from "@web/core/utils/hooks";
+
 
 
 function formatDate(date) {
@@ -45,6 +47,7 @@ function formatOrderData(order) {
         formattedOrder.push(`Partner Name\t${order.partner.name}`);
         formattedOrder.push(`Phone\t${order.partner.phone || "N/A"}`);
         formattedOrder.push(`Country\t${order.partner.country || "N/A"}`);
+        formattedOrder.push(`VAT\t${order.partner.vat || "N/A"}`);
         formattedOrder.push(`<05><BCC><03>`);
     }
 
@@ -72,12 +75,28 @@ function saveAs(blob, fileName) {
 
 patch(PaymentScreen.prototype, {
     
+    setup() {
+        super.setup(...arguments);
+        this.orm = useService("orm");
+    },
+
     // Override POS validateOrder method
     async validateOrder(isForceValidate) {
         await super.validateOrder(...arguments);
         const order = this.pos.get_order();
+        
+        // try {
+        //     const params = await this.orm.searchRead("ir.config_parameter", [["key", "=", "fiscal_cash_register.auto_download_receipt"]], ["value"]);
+        //     console.log(params[0]);
+        // } catch (error) {
+        //     console.log(error);
+        // }
+
         console.log(order);
+        
         createOrderTxtFile(order);
     }
+
+
 });
 
