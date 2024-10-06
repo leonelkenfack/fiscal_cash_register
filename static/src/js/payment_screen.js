@@ -13,44 +13,43 @@ function formatDate(date) {
 function calculateBCC(data) {
     let bcc = 0;
     for (let i = 0; i < data.length; i++) {
-        bcc ^= data.charCodeAt(i); // Calcul du checksum (BCC)
+        bcc ^= data.charCodeAt(i); // Calcul  checksum (BCC)
     }
-    return bcc.toString(16).toUpperCase(); // Retourne le checksum en hexadécimal
+    return bcc.toString(16).toUpperCase(); 
 }
 
 function formatOrderData(order) {
-    let seq = 1; // Initialisation du compteur de séquence
+    let seq = 1; // Int sequence compter
     const formattedOrder = [];
 
-    // Helper pour ajouter des blocs avec calcul de BCC
     function addBlock(command, data) {
-        const len = data.length + 2; // Longueur du message (ajustée)
+        const len = data.length + 2;
         const block = `<01><${len}><${seq}>${command}<DATA>${data}`;
         const bcc = calculateBCC(block);
         formattedOrder.push(`${block}<05><${bcc}><03>`);
         seq++;
     }
 
-    // Nom de la commande
+    // Order name 
     addBlock('CMD_ORDER', `Order Name\t${order.name}`);
 
-    // Date et heure de la commande
+    // Order datetime
     addBlock('CMD_ORDER', `Date\t${formatDate(order.date_order)}`);
 
-    // Détails du caissier
+    // Cashier detail
     addBlock('CMD_ORDER', `Cashier\t${order.cashier.name}`);
 
-    // Lignes de commande
+    // Order lines
     order.orderlines.forEach(line => {
         addBlock('CMD_ORDER_LINES', `CID\t${line.cid}\nProduct\t${line.full_product_name}\nPrice\t${line.price.toFixed(2)}\nQuantity\t${line.quantity.toFixed(3)}`);
     });
 
-    // Lignes de paiement
+    // Payment lines
     order.paymentlines.forEach(payment => {
         addBlock('CMD_PAYMENT_LINES', `CID\t${payment.cid}\nAmount\t${payment.amount.toFixed(2)}\nPayment Type\t${payment.name}`);
     });
 
-    // Informations du client
+    // Customer details
     if (order.partner) {
         addBlock('CMD_PARTNER', `Partner Name\t${order.partner.name}\nPhone\t${order.partner.phone || "N/A"}\nCountry\t${order.partner.country || "N/A"}\nVAT\t${order.partner.vat || "N/A"}`);
     }
