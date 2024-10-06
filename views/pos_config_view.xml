@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+ <record id="pos_config_view_form_inherit_receipt_download" model="ir.ui.view">
+  <field name="name">pos.config.form.inherit.receipt.download</field>
+  <field name="model">pos.config</field>
+  <field name="inherit_id" ref="point_of_sale.res_config_settings_view_form" />
+  <field name="arch" type="xml">
+   <xpath expr="//setting[@id='auto_printing']" position="after">
+    <setting id="auto_printing" help="Automatically download receipt as TXT file after order completion">
+        <field name="auto_download_receipt"/>
+    </setting>
+   </xpath>
+  </field>
+ </record>
+</odoo>
