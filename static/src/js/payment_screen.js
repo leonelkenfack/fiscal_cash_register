@@ -5,63 +5,64 @@ import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
 
 
-
 function formatDate(date) {
     const options = { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' };
     return new Intl.DateTimeFormat('en-GB', options).format(date) + ' DST';
 }
 
+function calculateBCC(data) {
+    let bcc = 0;
+    for (let i = 0; i < data.length; i++) {
+        bcc ^= data.charCodeAt(i); // Calcul du checksum (BCC)
+    }
+    return bcc.toString(16).toUpperCase(); // Retourne le checksum en hexadécimal
+}
+
 function formatOrderData(order) {
+    let seq = 1; // Initialisation du compteur de séquence
     const formattedOrder = [];
 
-    // Header of the order
-    formattedOrder.push(`<01><LEN><SEQ>CMD_ORDER<DATA>`);
-    formattedOrder.push(`Order Name\t${order.name}`);
-    formattedOrder.push(`Date\t${formatDate(order.date_order)}`);
-    formattedOrder.push(`Cashier\t${order.cashier.name}`);
-    formattedOrder.push(`<05><BCC><03>`);
+    // Helper pour ajouter des blocs avec calcul de BCC
+    function addBlock(command, data) {
+        const len = data.length + 2; // Longueur du message (ajustée)
+        const block = `<01><${len}><${seq}>${command}<DATA>${data}`;
+        const bcc = calculateBCC(block);
+        formattedOrder.push(`${block}<05><${bcc}><03>`);
+        seq++;
+    }
 
-    // Order details
-    formattedOrder.push(`<01><LEN><SEQ>CMD_ORDER_LINES<DATA>`);
+    // Nom de la commande
+    addBlock('CMD_ORDER', `Order Name\t${order.name}`);
+
+    // Date et heure de la commande
+    addBlock('CMD_ORDER', `Date\t${formatDate(order.date_order)}`);
+
+    // Détails du caissier
+    addBlock('CMD_ORDER', `Cashier\t${order.cashier.name}`);
+
+    // Lignes de commande
     order.orderlines.forEach(line => {
-        formattedOrder.push(`CID\t${line.cid}`);
-        formattedOrder.push(`Product\t${line.full_product_name}`);
-        formattedOrder.push(`Price\t${line.price.toFixed(2)}`);
-        formattedOrder.push(`Quantity\t${line.quantity.toFixed(3)}`);
-        // formattedOrder.push(`Tax IDs\t${line.tax_ids.join(",")}`);
+        addBlock('CMD_ORDER_LINES', `CID\t${line.cid}\nProduct\t${line.full_product_name}\nPrice\t${line.price.toFixed(2)}\nQuantity\t${line.quantity.toFixed(3)}`);
     });
-    formattedOrder.push(`<05><BCC><03>`);
 
-    // Order paiement lines
-    formattedOrder.push(`<01><LEN><SEQ>CMD_PAYMENT_LINES<DATA>`);
+    // Lignes de paiement
     order.paymentlines.forEach(payment => {
-        formattedOrder.push(`CID\t${payment.cid}`);
-        formattedOrder.push(`Amount\t${payment.amount.toFixed(2)}`);
-        formattedOrder.push(`Payment Type\t${payment.name}`);
+        addBlock('CMD_PAYMENT_LINES', `CID\t${payment.cid}\nAmount\t${payment.amount.toFixed(2)}\nPayment Type\t${payment.name}`);
     });
-    formattedOrder.push(`<05><BCC><03>`);
 
-    // Customer informations
+    // Informations du client
     if (order.partner) {
-        formattedOrder.push(`<01><LEN><SEQ>CMD_PARTNER<DATA>`);
-        formattedOrder.push(`Partner Name\t${order.partner.name}`);
-        formattedOrder.push(`Phone\t${order.partner.phone || "N/A"}`);
-        formattedOrder.push(`Country\t${order.partner.country || "N/A"}`);
-        formattedOrder.push(`VAT\t${order.partner.vat || "N/A"}`);
-        formattedOrder.push(`<05><BCC><03>`);
+        addBlock('CMD_PARTNER', `Partner Name\t${order.partner.name}\nPhone\t${order.partner.phone || "N/A"}\nCountry\t${order.partner.country || "N/A"}\nVAT\t${order.partner.vat || "N/A"}`);
     }
 
     return formattedOrder.join('\n');
 }
 
-
-
 function createOrderTxtFile(order) {
-    const data = formatOrderData(order);  
+    const data = formatOrderData(order);
     const blob = new Blob([data], { type: 'text/plain' });
-    saveAs(blob, `${order.name}.txt`); 
+    saveAs(blob, `${order.name}.txt`);
 }
-
 
 function saveAs(blob, fileName) {
     const a = document.createElement("a");
