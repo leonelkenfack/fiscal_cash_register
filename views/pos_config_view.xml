@@ -6,7 +6,7 @@
 		<field name="inherit_id" ref="point_of_sale.res_config_settings_view_form" />
 		<field name="arch" type="xml">
 			<xpath expr="//setting[@id='auto_printing']" position="after">
-				<setting id="auto_printing" help="Automatically download receipt as TXT file after order completion">
+				<setting id="auto_download" help="Automatically download receipt as TXT file after order completion">
 					<field name="auto_download_receipt"/>
 				</setting>
 			</xpath>

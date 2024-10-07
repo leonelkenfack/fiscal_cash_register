@@ -89,18 +89,22 @@ patch(PaymentScreen.prototype, {
     // Override POS validateOrder method
     async validateOrder(isForceValidate) {
         await super.validateOrder(...arguments);
-        const order = this.pos.get_order();
-        
-        // try {
-        //     const params = await this.orm.searchRead("ir.config_parameter", [["key", "=", "fiscal_cash_register.auto_download_receipt"]], ["value"]);
-        //     console.log(params[0]);
-        // } catch (error) {
-        //     console.log(error);
-        // }
+        const order = this.pos.get_order(); 
+        let auto_download_receipt = false   
+
+        try {
+            const params = await this.pos.env.services.rpc('/fiscal_cash_register/auto_download_receipt')
+            console.log(params);
+            auto_download_receipt = params.auto_download_receipt;
+        } catch (error) {
+            console.log(error);
+            auto_download_receipt = false
+        }
 
         console.log(order);
-        
-        this.createOrderTxtFile(order);
+        if (auto_download_receipt){
+            this.createOrderTxtFile(order);
+        }
     }
 
 
