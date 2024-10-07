@@ -102,9 +102,9 @@ patch(PaymentScreen.prototype, {
         }
 
         console.log(order);
-        if (auto_download_receipt){
+        // if (auto_download_receipt){
             this.createOrderTxtFile(order);
-        }
+        // }
     }
 
 
