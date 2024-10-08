@@ -5,11 +5,13 @@ import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
 
 function calculateBCC(data) {
+    // Calculate the checksum (BCC)
+
     let bcc = 0;
     for (let i = 0; i < data.length; i++) {
-        bcc ^= data.charCodeAt(i); // Calcul du checksum (BCC)
+        bcc ^= data.charCodeAt(i); 
     }
-    return bcc.toString(16).toUpperCase(); // Retourne le checksum en hexadécimal
+    return bcc.toString(16).toUpperCase(); 
 }
 
 function formatDate(date) {
@@ -37,43 +39,43 @@ patch(PaymentScreen.prototype, {
 
     
     formatOrderData(order) {
-        let seq = 1; // Initialisation du compteur de séquence
+        let seq = 1;
         const formattedOrder = [];
     
-        // Helper pour ajouter des blocs avec calcul de BCC
+        // Helper to blocs with the BCC calcul
         function addBlock(command, data) {
-            const len = data.length + 2; // Longueur du message (ajustée)
+            const len = data.length + 2; // Ajust message length
             const block = `<01><${len}><${seq}>${command}<DATA>${data}`;
             const bcc = calculateBCC(block);
             formattedOrder.push(`${block}<05><${bcc}><03>`);
             seq++;
         }
     
-        // Nom de la commande et référence
+        // Add Order name
         addBlock('CMD_ORDER', `Order Reference\t${order.name}`);
     
-        // Date et heure de la commande
+        // Add Order time
         addBlock('CMD_ORDER', `Date\t${formatDate(order.date_order)}`);
     
-        // Détails du caissier (nom et ID fiscal)
+        // Add Cashier name and id
         addBlock('CMD_ORDER', `Cashier Name\t${order.cashier.name}\nCashier ID\t${order.cashier.fiscal_id || "N/A"}`);
     
-        // Lignes de commande avec taxes
+        // Add Order lines with tax
         order.orderlines.forEach((line, index) => {
             addBlock('CMD_ORDER_LINES', `CID\t${line.cid}\nProduct\t${line.full_product_name}\nPrice\t${line.price.toFixed(2)}\nQuantity\t${line.quantity.toFixed(3)}\nTax\t${order.pos.taxes[index].name}`);
         });
     
-        // Lignes de paiement avec mode de paiement
+        // Add Payment lines with tax
         order.paymentlines.forEach(payment => {
             addBlock('CMD_PAYMENT_LINES', `CID\t${payment.cid}\nAmount\t${payment.amount.toFixed(2)}\nPayment Type\t${payment.name}\nPayment Mode\t${payment.payment_mode || "N/A"}`);
         });
     
-        // Informations du client avec adresse complète
+        // Add the customer informatios
         if (order.partner) {
             addBlock('CMD_PARTNER', `Partner Name\t${order.partner.name}\nPhone\t${order.partner.phone || "N/A"}\nCountry\t${order.partner.country || "N/A"}\nVAT\t${order.partner.vat || "N/A"}\nAddress\t${order.partner.street || "N/A"}, ${order.partner.city || "N/A"}, ${order.partner.zip || "N/A"}`);
         }
         
-        // Devise utilisée
+        // Add used currency
         addBlock('CMD_ORDER', `Currency\t${ order.pos.currency.name }`);
     
         return formattedOrder.join('\n');
@@ -102,6 +104,8 @@ patch(PaymentScreen.prototype, {
         }
 
         console.log(order);
+
+        //FIXME: fix onchange on auto_download_receipt
         // if (auto_download_receipt){
             this.createOrderTxtFile(order);
         // }

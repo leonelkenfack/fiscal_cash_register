@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 {
     'name': "Fiscal Cash Register",
-    'summary': "Short (1 phrase/line) summary of the module's purpose",
-    'author': "Leonel Kenfack",
-    'website': "https://www.linkedin.com/in/realleonelkenfack/",
+    'summary': "Automatically download receipt as TXT file after order completion",
+    'author': "Salut Tech",
+    'website': "https://saluttech.ro/",
     'category': 'Point of Sale',
     'version': '0.1',
     'depends': ['point_of_sale'],
