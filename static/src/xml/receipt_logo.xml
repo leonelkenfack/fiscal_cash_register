@@ -9,6 +9,10 @@
                 <img t-if="this.env.services.pos.config.image"
                      t-attf-src="/web/image?model=pos.config&amp;field=image&amp;id={{ this.env.services.pos.config.id }}"
                      style="width:10%"/>
+				<img t-if="!this.env.services.pos.config.image"
+                     src="/fiscal_cash_register/static/src/img/default.png"
+                     style="width:10%"/>
+
             </xpath>
         </t>
 </templates>

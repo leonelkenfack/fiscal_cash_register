@@ -10,6 +10,11 @@
                      t-on-click="() => debug.toggleWidget()"
                      t-if="pos.config.image"
                      t-attf-src="/web/image?model=pos.config&amp;field=image&amp;id={{ pos.config.id }}"/>
+				<img class="pos-logo h-75 ms-3 me-auto align-self-center"
+                     t-on-click="() => debug.toggleWidget()"
+                     t-if="!pos.config.image"
+                     src="/fiscal_cash_register/static/src/img/default.png"/>
+
             </xpath>
         </t>
 </templates>

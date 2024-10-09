@@ -34,3 +34,5 @@ Create or select an image file for the logo (PNG or JPG format recommended).
 
 ### Update the Module 
 Return to your Odoo interface, go to Apps, and click on "Update App List" to reload the module.
+
+
