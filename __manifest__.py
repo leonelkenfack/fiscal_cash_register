@@ -14,8 +14,13 @@
         'point_of_sale.assets_prod': [
             'fiscal_cash_register/static/src/js/payment_screen.js',
         ],
+        'point_of_sale._assets_pos': [
+            'fiscal_cash_register/static/src/xml/navbar_logo.xml',
+            'fiscal_cash_register/static/src/xml/receipt_logo.xml'
+        ],
     },
     'installable': True,
+    'auto_install': False,
     'application': False,
 }
 
