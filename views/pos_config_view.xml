@@ -9,6 +9,9 @@
 				<setting id="auto_download" help="Automatically download receipt as TXT file after order completion">
 					<field name="auto_download_receipt"/>
 				</setting>
+				<setting id="dude_com" help="Url of the DUDE COM server.">
+					<field name="dude_com_url"/>
+				</setting>
 			</xpath>
 		</field>
 	</record>

@@ -4,19 +4,82 @@ import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment
 import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
 
-function calculateBCC(data) {
-    // Calculate the checksum (BCC)
 
-    let bcc = 0;
-    for (let i = 0; i < data.length; i++) {
-        bcc ^= data.charCodeAt(i); 
+function calculateDiscount(order) {
+    let totalDiscount = 0;
+
+    if (order.discount) {
+        totalDiscount = order.discount;  
+    } else {
+        order.orderlines.forEach((line) => {
+            const lineTotal = line.price * line.quantity;
+            const lineDiscount = lineTotal * (line.discount / 100); 
+            totalDiscount += lineDiscount;
+        });
     }
-    return bcc.toString(16).toUpperCase(); 
+
+    return totalDiscount.toFixed(2); 
 }
 
-function formatDate(date) {
-    const options = { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-    return new Intl.DateTimeFormat('en-GB', options).format(date) + ' DST';
+function calculateTax(line) {
+    return line.price * (line.tax_ids ? line.tax_ids[0].amount / 100 : 0);
+}
+
+function calculateSubtotal(order) {
+    return order.orderlines.reduce((total, line) => total + line.price * line.quantity, 0);
+}
+
+function addSubtotalSection(order) {
+    const subtotalLines = [];
+
+    subtotalLines.push("\n_________________________________________________________________\n");
+
+    subtotalLines.push(`Order: ${order.trackingNumber} Function Subtotal\n`);
+
+    subtotalLines.push(`51,Print[\\t]Display[\\t]DiscountType[\\t]DiscountValue[\\t]\n`);
+
+    const discountValue = calculateDiscount(order);  
+    const discountType = 2; 
+
+    subtotalLines.push(`51,1[\\t]1[\\t]${discountType}[\\t]${discountValue}[\\t]\n`);
+
+    subtotalLines.push(`Print Print the amount after subtotal`);
+    subtotalLines.push(`0 - Do not print`);
+    subtotalLines.push(`1 - Print`);
+
+    subtotalLines.push(`Display Show the subtotal on the customer display`);
+    subtotalLines.push(`0 - Do not display`);
+    subtotalLines.push(`1 - Display`);
+
+    subtotalLines.push(`DiscountType - Discount type.`);
+
+    return subtotalLines.join('\n');
+}
+
+function formatTransaction(order) {
+    const lines = [];
+
+    const customerVAT = order.partner ? order.partner.vat : "N/A";
+    lines.push(`48,1[\\t]${order.uid}[\\t]1[\\t]I[\\t]${customerVAT}[\\t]`);
+
+    order.orderlines.forEach((line, index) => {
+        const taxAmount = calculateTax(line);
+        const unit = line.product.uom_id ? line.product.uom_id[1] : "Units.";
+        lines.push(`49,${line.full_product_name}[\\t]${index + 1}[\\t]${line.price.toFixed(2)}[\\t]${line.quantity.toFixed(3)}[\\t]${line.tax_ids ? 1 : ""}[\\t]${taxAmount.toFixed(2)}[\\t]1[\\t]${unit}[\\t]`);
+    });
+
+    const subtotal = calculateSubtotal(order).toFixed(2);
+    const discountType = 2; 
+
+    const printOption = 1; 
+    const displayOption = 1; 
+    lines.push(`51,${printOption}[\\t]${displayOption}[\\t]${discountType}[\\t]${subtotal}[\\t]`);
+    
+    lines.push("53,0[\\t][\\t]");
+
+    lines.push("56");
+
+    return lines.join('\n');
 }
 
 function saveAs(blob, fileName) {
@@ -28,7 +91,29 @@ function saveAs(blob, fileName) {
     document.body.removeChild(a);
 }
 
+function sendTxtFile(fileContent, url) {
+    if (url == undefined ) return
 
+    const socket = new WebSocket('ws://' + url); 
+
+    socket.onopen = function() {
+        console.log("Connection established with the DUDE server.");
+        socket.send(fileContent);
+        console.log("TXT file sent to the DUDE server: \n" + fileContent);
+    };
+
+    socket.onmessage = function(event) {
+        console.log("Response from DUDE server: " + event.data);
+    };
+
+    socket.onerror = function(error) {
+        console.error("Error connecting to the DUDE server: ", error);
+    };
+
+    socket.onclose = function() {
+        console.log("Connection with the DUDE server closed.");
+    };
+}
 
 patch(PaymentScreen.prototype, {
     
@@ -39,76 +124,38 @@ patch(PaymentScreen.prototype, {
 
     
     formatOrderData(order) {
-        let seq = 1;
-        const formattedOrder = [];
-    
-        // Helper to blocs with the BCC calcul
-        function addBlock(command, data) {
-            const len = data.length + 2; // Ajust message length
-            const block = `<01><${len}><${seq}>${command}<DATA>${data}`;
-            const bcc = calculateBCC(block);
-            formattedOrder.push(`${block}<05><${bcc}><03>`);
-            seq++;
-        }
-    
-        // Add Order name
-        addBlock('CMD_ORDER', `Order Reference\t${order.name}`);
-    
-        // Add Order time
-        addBlock('CMD_ORDER', `Date\t${formatDate(order.date_order)}`);
-    
-        // Add Cashier name and id
-        addBlock('CMD_ORDER', `Cashier Name\t${order.cashier.name}\nCashier ID\t${order.cashier.fiscal_id || "N/A"}`);
-    
-        // Add Order lines with tax
-        order.orderlines.forEach((line, index) => {
-            addBlock('CMD_ORDER_LINES', `CID\t${line.cid}\nProduct\t${line.full_product_name}\nPrice\t${line.price.toFixed(2)}\nQuantity\t${line.quantity.toFixed(3)}\nTax\t${order.pos.taxes[index].name}`);
-        });
-    
-        // Add Payment lines with tax
-        order.paymentlines.forEach(payment => {
-            addBlock('CMD_PAYMENT_LINES', `CID\t${payment.cid}\nAmount\t${payment.amount.toFixed(2)}\nPayment Type\t${payment.name}\nPayment Mode\t${payment.payment_mode || "N/A"}`);
-        });
-    
-        // Add the customer informatios
-        if (order.partner) {
-            addBlock('CMD_PARTNER', `Partner Name\t${order.partner.name}\nPhone\t${order.partner.phone || "N/A"}\nCountry\t${order.partner.country || "N/A"}\nVAT\t${order.partner.vat || "N/A"}\nAddress\t${order.partner.street || "N/A"}, ${order.partner.city || "N/A"}, ${order.partner.zip || "N/A"}`);
-        }
-        
-        // Add used currency
-        addBlock('CMD_ORDER', `Currency\t${ order.pos.currency.name }`);
-    
-        return formattedOrder.join('\n');
+        return formatTransaction(order)
     },
     
-    createOrderTxtFile(order) {
-        const data = this.formatOrderData(order);
+    createOrderTxtFile(order, url) {
+        const data = this.formatOrderData(order) + addSubtotalSection(order);
         const blob = new Blob([data], { type: 'text/plain' });
+        sendTxtFile(blob, url)
         saveAs(blob, `${order.name}.txt`);
     },
     
 
-    // Override POS validateOrder method
     async validateOrder(isForceValidate) {
         await super.validateOrder(...arguments);
         const order = this.pos.get_order(); 
-        let auto_download_receipt = false   
+        let auto_download_receipt = false 
+        let url = undefined  
 
         try {
-            const params = await this.pos.env.services.rpc('/fiscal_cash_register/auto_download_receipt')
+            const params = await this.pos.env.services.rpc('/fiscal_cash_register/configs')
             console.log(params);
             auto_download_receipt = params.auto_download_receipt;
+            url = params.dude_com_url;
         } catch (error) {
             console.log(error);
-            auto_download_receipt = false
         }
 
         console.log(order);
 
         //FIXME: fix onchange on auto_download_receipt
-        // if (auto_download_receipt){
-            this.createOrderTxtFile(order);
-        // }
+        if (auto_download_receipt){
+            this.createOrderTxtFile(order, url);
+        }
     }
 
 
