@@ -5,81 +5,80 @@ import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
 
 
-function calculateDiscount(order) {
-    let totalDiscount = 0;
 
-    if (order.discount) {
-        totalDiscount = order.discount;  
-    } else {
-        order.orderlines.forEach((line) => {
-            const lineTotal = line.price * line.quantity;
-            const lineDiscount = lineTotal * (line.discount / 100); 
-            totalDiscount += lineDiscount;
-        });
+function addFiscalSection(order) {
+    const lines = [];
+    
+    lines.push("nf_");
+
+    if(order.partner.vat){
+        lines.push(`CF^${order.partner.vat}`);
     }
 
-    return totalDiscount.toFixed(2); 
-}
-
-function calculateTax(line) {
-    return line.price * (line.tax_ids ? line.tax_ids[0].amount / 100 : 0);
-}
-
-function calculateSubtotal(order) {
-    return order.orderlines.reduce((total, line) => total + line.price * line.quantity, 0);
-}
-
-function addSubtotalSection(order) {
-    const subtotalLines = [];
-
-    subtotalLines.push("\n_________________________________________________________________\n");
-
-    subtotalLines.push(`Order: ${order.trackingNumber} Function Subtotal\n`);
-
-    subtotalLines.push(`51,Print[\\t]Display[\\t]DiscountType[\\t]DiscountValue[\\t]\n`);
-
-    const discountValue = calculateDiscount(order);  
-    const discountType = 2; 
-
-    subtotalLines.push(`51,1[\\t]1[\\t]${discountType}[\\t]${discountValue}[\\t]\n`);
-
-    subtotalLines.push(`Print Print the amount after subtotal`);
-    subtotalLines.push(`0 - Do not print`);
-    subtotalLines.push(`1 - Print`);
-
-    subtotalLines.push(`Display Show the subtotal on the customer display`);
-    subtotalLines.push(`0 - Do not display`);
-    subtotalLines.push(`1 - Display`);
-
-    subtotalLines.push(`DiscountType - Discount type.`);
-
-    return subtotalLines.join('\n');
-}
-
-function formatTransaction(order) {
-    const lines = [];
-
-    const customerVAT = order.partner ? order.partner.vat : "N/A";
-    lines.push(`48,1[\\t]${order.uid}[\\t]1[\\t]I[\\t]${customerVAT}[\\t]`);
-
-    order.orderlines.forEach((line, index) => {
-        const taxAmount = calculateTax(line);
+    order.orderlines.forEach((line) => {
         const unit = line.product.uom_id ? line.product.uom_id[1] : "Units.";
-        lines.push(`49,${line.full_product_name}[\\t]${index + 1}[\\t]${line.price.toFixed(2)}[\\t]${line.quantity.toFixed(3)}[\\t]${line.tax_ids ? 1 : ""}[\\t]${taxAmount.toFixed(2)}[\\t]1[\\t]${unit}[\\t]`);
+        lines.push(`S^${line.full_product_name}^${(line.price * 100).toFixed(0)}^${(line.quantity * 1000).toFixed(0)}^${unit}^${line.vat_group||1}^${line.article_group ||1}`);
+        if (line.discount > 0) {
+            const discountValue = (line.discount * 100).toFixed(0);
+            lines.push(`MV^${discountValue}`);
+        }
     });
 
-    const subtotal = calculateSubtotal(order).toFixed(2);
-    const discountType = 2; 
+    order.paymentlines.forEach((payment) => {
+        let paymentType;
+        switch (payment.name) {
+            case 'Cash':
+                paymentType = 1;  
+                break;
+            case 'Card':
+                paymentType = 2;  
+                break;
+            case 'Credit':
+                paymentType = 3;  
+                break;
+            case 'Meal voucher':
+                paymentType = 4;  
+                break;
+            case 'Value voucher':
+                paymentType = 5;  
+                break;
+            case 'Voucher':
+                paymentType = 6;  
+                break;
+            case 'Modern payment':
+                paymentType = 7;  
+                break;
+            case 'Other methods':
+                paymentType = 8;  
+                break;
+            default:
+                paymentType = 9;  
+        }
+        const amount = (payment.amount).toFixed(0); 
+        lines.push(`P^${paymentType}^${amount*100}`);
+    });
 
-    const printOption = 1; 
-    const displayOption = 1; 
-    lines.push(`51,${printOption}[\\t]${displayOption}[\\t]${discountType}[\\t]${subtotal}[\\t]`);
-    
-    lines.push("53,0[\\t][\\t]");
+    if (order.hasBankTerminal) {
+        const terminalAmount = (order.total*100).toFixed(0); 
+        lines.push(`DS^${terminalAmount}`);
+    }
+    lines.push(`TL^Order Subtotal:`)
+    lines.push(`St${order.get_subtotal()*100}`)
 
-    lines.push("56");
+    const displayText = `${order.name}, Total: ${order.get_subtotal()*100} ${ order.pos.currency.name}`;
+    lines.push(`VB^${displayText}`);
 
-    return lines.join('\n');
+    if(order.get_tax_details()){
+        console.log(order.get_tax_details())
+        // lines.push(`CF^${order.get_tax_details()}`); 
+
+    }
+
+    if (order.barcode) {
+        lines.push(`CB^${order.barcode}^2`); 
+    }
+
+    return lines.join("\n");
 }
 
 function saveAs(blob, fileName) {
@@ -91,30 +90,6 @@ function saveAs(blob, fileName) {
     document.body.removeChild(a);
 }
 
-function sendTxtFile(fileContent, url) {
-    if (url == undefined ) return
-
-    const socket = new WebSocket('ws://' + url); 
-
-    socket.onopen = function() {
-        console.log("Connection established with the DUDE server.");
-        socket.send(fileContent);
-        console.log("TXT file sent to the DUDE server: \n" + fileContent);
-    };
-
-    socket.onmessage = function(event) {
-        console.log("Response from DUDE server: " + event.data);
-    };
-
-    socket.onerror = function(error) {
-        console.error("Error connecting to the DUDE server: ", error);
-    };
-
-    socket.onclose = function() {
-        console.log("Connection with the DUDE server closed.");
-    };
-}
-
 patch(PaymentScreen.prototype, {
     
     setup() {
@@ -123,14 +98,9 @@ patch(PaymentScreen.prototype, {
     },
 
     
-    formatOrderData(order) {
-        return formatTransaction(order)
-    },
-    
-    createOrderTxtFile(order, url) {
-        const data = this.formatOrderData(order) + addSubtotalSection(order);
+    createOrderTxtFile(order) {
+        const data = addFiscalSection(order);
         const blob = new Blob([data], { type: 'text/plain' });
-        sendTxtFile(blob, url)
         saveAs(blob, `${order.name}.txt`);
     },
     
@@ -138,24 +108,23 @@ patch(PaymentScreen.prototype, {
     async validateOrder(isForceValidate) {
         await super.validateOrder(...arguments);
         const order = this.pos.get_order(); 
-        let auto_download_receipt = false 
-        let url = undefined  
+        // let auto_download_receipt = false 
+        // let url = undefined  
 
-        try {
-            const params = await this.pos.env.services.rpc('/fiscal_cash_register/configs')
-            console.log(params);
-            auto_download_receipt = params.auto_download_receipt;
-            url = params.dude_com_url;
-        } catch (error) {
-            console.log(error);
-        }
+        // try {
+        //     const params = await this.pos.env.services.rpc('/fiscal_cash_register/configs')
+        //     console.log(params);
+        //     auto_download_receipt = params.auto_download_receipt;
+        //     url = params.dude_com_url;
+        // } catch (error) {
+        //     console.log(error);
+        // }
 
         console.log(order);
 
-        //FIXME: fix onchange on auto_download_receipt
-        if (auto_download_receipt){
-            this.createOrderTxtFile(order, url);
-        }
+        // if (auto_download_receipt){
+        this.createOrderTxtFile(order);
+        // }
     }
 
 
