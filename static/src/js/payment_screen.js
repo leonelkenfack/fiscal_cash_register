@@ -11,8 +11,12 @@ function addFiscalSection(order) {
     
     lines.push("nf_");
 
-    if(order.partner.vat){
+    try {
+        if(order.partner.vat){
         lines.push(`CF^${order.partner.vat}`);
+    }
+    } catch (error) {
+        
     }
 
     order.orderlines.forEach((line) => {
